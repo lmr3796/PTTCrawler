@@ -5,14 +5,21 @@
 require 'net/telnet'
 
 class PTTCrawler
+    @@Arrow = {
+        :up => '^[[A',
+        :down => '^[[B',
+        :left => '^[[D',
+        :right => '^[[C',
+    }
     def initialize(opt)
         @tn = Net::Telnet.new(
             'Host'    => opt[:host],
             'Timeout'   => 3,
-            'Waittime'  => 2,
+            'Waittime'  => 0.3,
         )
         @username = opt[:username]
         @password = opt[:password]
+        ObjectSpace.define_finalizer(self, proc{@tn.close()})
     end
     def login
         @tn.waitfor(/guest/)
@@ -21,11 +28,11 @@ class PTTCrawler
 
         # Log out other connections, remove failure log...
         for i in 0...2
-        begin
-            @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 5, 'String' => ''){|s| @tn.puts('n'); puts s}  
-        rescue
-            break
-        end
+            begin
+                @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 5, 'String' => ''){|s| @tn.puts('n'); puts s}  
+            rescue
+                break
+            end
         end
         @tn.cmd('Match' => Regexp.new("批踢踢實業坊".force_encoding('binary')), 'String' => ''){|s| puts s}
     end
@@ -38,12 +45,17 @@ class PTTCrawler
             retry
         end
     end
+    def search_article_by_id(article_id, board_name)
+        goto_board(board_name) if board_name
+        @tn.cmd('Match' => /./, 'String' => article_id){|s| print(s)}
+        @tn.cmd('Match' => /./, 'String' => @@Arrow[:right]){|s| print(s)}
+    end
 end
 
 
 crawler = PTTCrawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
 crawler.login
-crawler.goto_board('gossiping')
+crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
 
 
 

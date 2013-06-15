@@ -8,16 +8,20 @@ class Article
 end
 class PTTCrawler
     @@refresh = '^L'
-    @@arrow = {
-        :up => '^[[A',
-        :down => '^[[B',
-        :left => '^[[D',
-        :right => '^[[C',
+    @@key = {
+        :up     => "\e[A",
+        :down   => "\e[B",
+        :left   => "\e[D",
+        :right  => "\e[C",
+        :pgup   => "\e[5~",
+        :pgdn   => "\e[6~",
+        :home   => "\e[1~",
+        :end    => "\e[4~",
     }
     def initialize(opt)
         @tn = Net::Telnet.new(
             'Host'    => opt[:host],
-            'Timeout'   => 3,
+            'Timeout'   => 2,
             'Waittime'  => 0.3,
         )
         ObjectSpace.define_finalizer(self, proc{@tn.close()})
@@ -50,19 +54,35 @@ class PTTCrawler
         end
     end
     def search_article_by_id(article_id, board_name)
+        # Goto the board
         goto_board(board_name) if board_name
-        @tn.cmd('Match' => /./, 'String' => article_id)#{|s| print(s)}
-        @tn.cmd('Match' => /./, 'String' => @@arrow[:right])#{|s| print(s)}
-    end
-    def read_terminal()
-        return @tn.cmd('Match' => /./, 'String' =>@@refresh)
+
+        # Goto a certain article
+        @tn.cmd('Match' => /./, 'String' => article_id)
+
+        binmode_tmp = @tn.binmode   # In order to store the state back
+
+        # Must set this to switch off the implicit "enter" on every key stroke, 
+        @tn.binmode = true
+
+        # Enter the article and start reading to the buf
+        buf = @tn.cmd('Match' => /./, 'Waittime' => 1, 'String' => @@key[:right]){|s| $stderr.print(s)}
+        while true  # Greedily read until no more data and handled by the rescue
+            buf += @tn.cmd('Match' => /./, 'Waittime' => 1, 'String' => @@key[:pgdn]){|s| $stderr.print(s)}
+        end
+    rescue
+        @tn.binmode = binmode_tmp
+        return buf
     end
 end
 
 
 crawler = PTTCrawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
-crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
-puts crawler.read_terminal
+puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
+#s = open('log').read
+#
+#pattern = "瀏覽 第 1/10 頁 (  4%).*離開"
+#print s =~ Regexp.new(pattern.force_encoding('binary'))
 
 
 

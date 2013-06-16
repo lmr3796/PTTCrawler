@@ -4,19 +4,33 @@
 
 require 'net/telnet'
 
-class Article
-end
+CONTROL_CODE_REGEX = Regex.compile(/\x1B\[(?:(?>(?>(?>\d+;)*\d+)?)m|(?>(?>\d+;\d+)?)H|K)/)
 class Canvas
-    def initialize
+    def initialize(max_col=80, max_row=24)
         # ANSI 80 * 24 Terminal
-        @buf = [' ' * 24] * 80
-        @row = 0 
-        @column = 0 
+        @max_row = max_row
+        @max_col = max_col
+        @screen = ' ' * @max_row * @max_col # A continuous buffer to simulate it....
+        @cursor = {:row => 0, :col => 0}
     end
-    def write(buf)
+    def update(buf)
+        while buf.size > 0
+            next_control_id = buf.index(CONTROL_CODE_REGEX)
+            if next_control_id == 0
+                #Process it only if it's cursor control sequence
+                control = buf.slice!(CONTROL_CODE_REGEX)
+                case 
+                when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?H/
+                    @cursor[:row] = $1.[:row] or 0
+                    @cursor[:col] = $1.[:col] or 0
+                end
+            else
+                raw_str = buf.slice!(0...next_control_id)
+            end
+        end
     end
 end
-class PTTCrawler
+class Crawler
     @@refresh = '^L'
     @@key = {
         :up     => "\e[A",
@@ -91,7 +105,6 @@ class PTTCrawler
     end
 
     def preprocess_pgdn(buf)
-        return buf
         #@canvas.write_buf(buf)
         #pattern = "瀏覽 第.*頁 (.*%).*離開"
         #buf.gsub!(/#{pattern.force_encoding('binary')}/, '')
@@ -118,7 +131,7 @@ class PTTCrawler
 end
 
 
-crawler = PTTCrawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
+crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
 puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
 
 #s = open('article.log').readlines

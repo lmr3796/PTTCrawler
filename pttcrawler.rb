@@ -43,7 +43,7 @@ class PTTCrawler
     def login
         @tn.waitfor(/guest/)
         @tn.puts('')
-        @tn.cmd('Match' => /./, 'String' => "#{@username},\r#{@password}\r")#{|s| puts s}
+        @tn.cmd('Match' => /./, 'String' => "#{@username}\r#{@password}\r")#{|s| puts s}
 
         # Log out other connections, remove failure log...
         #for i in 0...2
@@ -53,12 +53,12 @@ class PTTCrawler
         #        break
         #    end
         #end
-        @tn.cmd('Match' => Regexp.new("批踢踢實業坊".force_encoding('binary')), 'String' => @@key[:left])#{|s| puts s}
+        @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@key[:left])#{|s| puts s}
     end
     def goto_board(board_name)
         @tn.puts("s#{board_name}")
         begin
-            @tn.waitfor('Match' => Regexp.new("看板《".force_encoding('binary')))#{|s| puts s}
+            @tn.waitfor('Match' => Regexp.new("看板《".encode('big5').force_encoding('binary')))#{|s| puts s}
         rescue
             @tn.puts('')
             retry
@@ -91,7 +91,8 @@ class PTTCrawler
     end
 
     def preprocess_pgdn(buf)
-        @canvas.write_buf(buf)
+        return buf
+        #@canvas.write_buf(buf)
         #pattern = "瀏覽 第.*頁 (.*%).*離開"
         #buf.gsub!(/#{pattern.force_encoding('binary')}/, '')
         #buf.gsub!(/(^\s*)|\x08|\r/, '')

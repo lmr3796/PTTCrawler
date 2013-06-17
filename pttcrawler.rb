@@ -10,8 +10,11 @@ class Canvas
     # ANSI 80 * 24 Terminal
     @max_row = max_row
     @max_col = max_col
-    @screen = [' ' * @max_col] * @max_row # A continuous buffer to simulate it....
     @cursor = {:row => 0, :col => 0}
+    @screen = []
+    for i in 0...@max_row
+      @screen << ' '*@max_col
+    end
   end
 
   def update(buf)
@@ -22,6 +25,8 @@ class Canvas
         control = buf.slice!(CONTROL_CODE_REGEX)
         case control
         when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?(H|f)/
+          #$stderr.puts "========================#{control}============================"
+          #@screen.each_with_index{|s, index| $stderr.puts "#{index}:\t#{s}"}
           #$stderr.puts 'Cursor control!'
           @cursor[:row] = ($~[:row] or 1).to_i - 1
           @cursor[:col] = ($~[:col] or 1).to_i - 1
@@ -65,7 +70,7 @@ class Canvas
         else 
           # Overflow
           @screen.delete_at(0)
-          @screen.push(' '*@max_col)
+          @screen << (' '*@max_col)
         end
       }
       case c
@@ -195,7 +200,7 @@ if __FILE__ ==  $PROGRAM_NAME
   content = open('article.log').read;
   a = Canvas.new;
   a.update(content);
-  a.screen.size
+  #a.screen.size
   #crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   #puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
 

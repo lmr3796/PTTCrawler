@@ -71,7 +71,10 @@ class Canvas
     bar = '=' * ((@max_col - control.size)/2)
     bar = "\t#{bar}#{control}#{bar}"
     $stderr.puts bar
-    @screen.each_with_index{|s, index| $stderr.puts "#{index}:\t|#{s}|"}
+    @screen.each_with_index{|s, index|
+      line = s.encode('utf-8','big5',{:invalid => :replace, :undef => :replace, :replace =>' '})
+      $stderr.puts "#{index}:#{s.size}\t|#{line}|"
+    }
   end
 
   def write_raw_str(str)
@@ -102,8 +105,6 @@ class Canvas
       end
     }
   end
-
-
 end
 
 class Crawler

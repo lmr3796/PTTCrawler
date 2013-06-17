@@ -16,10 +16,14 @@ class Canvas
     @screen
   end
 
+  # By default an ANSI 80 * 24 Terminal
   def initialize(max_col=80, max_row=24)
-    # ANSI 80 * 24 Terminal
     @max_row = max_row
     @max_col = max_col
+    clear
+  end
+
+  def clear
     @cursor = {:row => 0, :col => 0}
     @screen = []
     for i in 0...@max_row
@@ -67,14 +71,17 @@ class Canvas
     @cursor[:col] = range.max
   end
 
-  def dump_screen(control='')
-    bar = '=' * ((@max_col - control.size)/2)
-    bar = "\t#{bar}#{control}#{bar}"
-    $stderr.puts bar
-    @screen.each_with_index{|s, index|
-      line = s.encode('utf-8','big5',{:invalid => :replace, :undef => :replace, :replace =>' '})
-      $stderr.puts "#{index}:#{s.size}\t|#{line}|"
-    }
+  def dump_screen(control='', to_stderr=false)
+    if to_stderr
+      bar = '=' * ((@max_col - control.size)/2)
+      bar = "\t#{bar}#{control}#{bar}"
+      $stderr.puts bar
+      @screen.each_with_index{|s, index|
+        line = s.encode('utf-8','big5',{:invalid => :replace, :undef => :replace, :replace =>' '})
+        $stderr.puts "#{index}:#{s.size}\t|#{line}|"
+      }
+    end
+    return @screen.map{|s| s.encode('utf-8','big5',{:invalid => :replace, :undef => :replace, :replace =>' '})}
   end
 
   def write_raw_str(str)
@@ -129,23 +136,29 @@ class Crawler
     @username = opt[:username]
     @password = opt[:password]
     @canvas = Canvas.new
-    login()
   end
+
+  def dump_screen
+    @canvas.dump_screen
+  end
+
   def login
     @tn.waitfor(/guest/)
     @tn.puts('')
     @tn.cmd('Match' => /./, 'String' => "#{@username}\r#{@password}\r")#{|s| puts s}
 
     # Log out other connections, remove failure log...
-    #for i in 0...2
-    #    begin
-    #        @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 5, 'String' => ''){|s| @tn.puts('n'); puts s}  
-    #    rescue
-    #        break
-    #    end
-    #end
+    for i in 0...2
+        begin
+            @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 5, 'String' => '')
+            @tn.puts('n')  
+        rescue
+            break
+        end
+    end
     @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@key[:left])#{|s| puts s}
   end
+
   def goto_board(board_name)
     @tn.puts("s#{board_name}")
     begin
@@ -155,6 +168,7 @@ class Crawler
       retry
     end
   end
+
   def search_article_by_id(article_id, board_name)
     # Goto the board
     goto_board(board_name) if board_name
@@ -168,58 +182,24 @@ class Crawler
     @tn.binmode = true
 
     # Enter the article and start reading to the buf
-    result = ''
-    buf = @tn.cmd('Match' => /./, 'Waittime' => 1, 'String' => @@key[:right])#{|s| $stderr.print(s)}
-    result += preprocess_pgdn(buf)
+    result = []
+    @canvas.update(@tn.cmd('Match' => /./, 'Waittime' => 2, 'String' => @@key[:right]))
+    result.concat(@canvas.dump_screen) 
     while true  # Greedily read until no more data and handled by the rescue
-      buf = @tn.cmd('Match' => /./, 'Waittime' => 1, 'String' => @@key[:pgdn])#{|s| $stderr.print(s)}
-      result += preprocess_pgdn(buf)
+      @canvas.update(@tn.cmd('Match' => /./, 'Waittime' => 2, 'String' => @@key[:pgdn]))
+      result.concat(@canvas.dump_screen[1...-1])  #Page down duplicates last line at line 1, so ignore it
     end
   rescue TimeoutError
     @tn.binmode = binmode_tmp
     return result
-    #return gsub_ansi_by_space(result)
   end
-
-  def preprocess_pgdn(buf)
-    #@canvas.write_buf(buf)
-    #pattern = "瀏覽 第.*頁 (.*%).*離開"
-    #buf.gsub!(/#{pattern.force_encoding('binary')}/, '')
-    #buf.gsub!(/(^\s*)|\x08|\r/, '')
-    ## Cursor moving
-    #buf.gsub!(/\x1B\[\d{1,2};\d{1,2}H/,"\n")
-    ## color code
-    #buf.gsub!(/\x1B\[((\d{1,2};)*\d{1,2})?m/,'')
-    ##buf.gsub!(/\x1B\[K/, '')
-    return buf
-  end
-
-  # Copied from http://godspeedlee.myweb.hinet.net/ruby/ptt2.htm
-  def gsub_ansi_by_space(s)
-    raise ArgumentError, "search_by_title() invalid title:" unless s.kind_of? String
-    s.gsub!(/\x1B\[(?:(?>(?>(?>\d+;)*\d+)?)m|(?>(?>\d+;\d+)?)H|K)/) do |m|
-      if m[m.size-1].chr == 'K'
-        "\n"
-      else
-        " "
-      end
-    end
-  end 
 end
 
 
 # main body if used as a executable
+# Here are sample usages
 if __FILE__ ==  $PROGRAM_NAME
-  #content = open('article.log').read;
-  content = $stdin.read.force_encoding('binary')
-  a = Canvas.new;
-  a.update(content);
-  #crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
-  #puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
-
-  #s = open('article.log').readlines
-  #s.each_with_index{|val, index|
-  #    puts index if val.force_encoding('binary') =~ Regexp.new(pattern.force_encoding('binary'))
-  #}
-  
+  crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
+  crawler.login
+  puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
 end

@@ -6,6 +6,16 @@ require 'net/telnet'
 
 CONTROL_CODE_REGEX = Regexp.compile(/\x1B\[(?:(?>(?>(?>\d+;)*\d+)?)m|(?>(?>\d+;\d+)?)H|K)/)
 class Canvas
+  def error_buf
+    @error_buf
+  end
+  def cursor
+    @cursor
+  end
+  def screen
+    @screen
+  end
+
   def initialize(max_col=80, max_row=24)
     # ANSI 80 * 24 Terminal
     @max_row = max_row
@@ -45,8 +55,7 @@ class Canvas
                     0...@max_col
                   else
                   end
-          range.each{|i| @screen[@cursor[:row]][i] = ' '}
-          @cursor[:col] = range.max
+          erase_range(range)
         end
       else
         # If no more control code then slice all!!
@@ -55,10 +64,11 @@ class Canvas
       end
     end
   end
-  def error_buf
-    @error_buf
-  end
 
+  def erase_range(range)
+    range.each{|i| @screen[@cursor[:row]][i] = ' '}
+    @cursor[:col] = range.max
+  end
 
   def write_raw_str(str)
     # Must simulate 1 by 1 because we have no idea about when will a new line appear...
@@ -74,10 +84,12 @@ class Canvas
         end
       }
       case c
-      when "\r"
-        next
+      when "\b"
+        erase_range(@cursor[:col]-1...@cursor[:col])
       when "\n"
         new_line_cursor.call
+      when /\r/
+        next
       else
         @screen[@cursor[:row]][@cursor[:col]] = c
         @cursor[:col] += 1
@@ -86,12 +98,7 @@ class Canvas
     }
   end
 
-  def cursor
-    @cursor
-  end
-  def screen
-    @screen
-  end
+
 end
 
 class Crawler

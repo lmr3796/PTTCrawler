@@ -126,6 +126,11 @@ class Crawler
     :home   => "\e[1~",
     :end    => "\e[4~",
   }
+
+  def session
+    @tn
+  end
+
   def initialize(opt)
     @tn = Net::Telnet.new(
       'Host'    => opt[:host],

@@ -40,13 +40,12 @@ class Canvas
                     0...@max_col
                   else
                   end
-          puts range
           range.each{|i| @screen[@cursor[:row]][i] = ' '}
           @cursor[:col] = range.max
         end
       else
         # If no more control code then slice all!!
-        @raw_str = buf.slice!(0...next_control_id) rescue buf.slice!(0...-1)
+        @raw_str = buf.slice!(0...next_control_id) rescue buf.slice!(0..-1)
         write_raw_str(@raw_str)
       end
     end
@@ -70,9 +69,9 @@ class Canvas
         end
       }
       case c
-      when '\r'
+      when "\r"
         next
-      when '\n'
+      when "\n"
         new_line_cursor.call
       else
         @screen[@cursor[:row]][@cursor[:col]] = c
@@ -91,7 +90,7 @@ class Canvas
 end
 
 class Crawler
-  @@refresh = '^L'
+  @@refresh = "^L"
   @@key = {
     :up     => "\e[A",
     :down   => "\e[B",
@@ -196,6 +195,7 @@ if __FILE__ ==  $PROGRAM_NAME
   content = open('article.log').read;
   a = Canvas.new;
   a.update(content);
+  a.screen.size
   #crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   #puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
 
@@ -203,4 +203,5 @@ if __FILE__ ==  $PROGRAM_NAME
   #s.each_with_index{|val, index|
   #    puts index if val.force_encoding('binary') =~ Regexp.new(pattern.force_encoding('binary'))
   #}
+  
 end

@@ -23,23 +23,26 @@ class Canvas
         case control
         when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?(H|f)/
           $stderr.puts 'Cursor control!'
-          @cursor[:row] = $1[:row] or 0
-          @cursor[:col] = $1[:col] or 0
+          @cursor[:row] = ($~[:row] or 0)
+          @cursor[:col] = ($~[:col] or 0)
         when /\e\[(?<type>)K/
+          type = $~[:type]
           $stderr.puts 'Erase control!'
-          range = case $1[:type]
-                  when nil
+          range = case type
+                  when ''
                     # <ESC>[K  ==> Current to end
-                    @cursor..@max_col
+                    @cursor[:col]...@max_col
                   when 1
                     # <ESC>[1K ==> Head to current
-                    0...@cursor
+                    0..@cursor[:col]
                   when 2
                     # <ESC>[2K ==> Full line
-                    0..@max_col
+                    0...@max_col
+                  else
                   end
+          puts range
           range.each{|i| @screen[@cursor[:row]][i] = ' '}
-          @cursor[:row] = range.max
+          @cursor[:col] = range.max
         end
       else
         write_raw_str(buf.slice!(0...next_control_id))
@@ -185,6 +188,9 @@ end
 
 # main body if used as a executable
 if __FILE__ ==  $PROGRAM_NAME
+  content = open('article.log').read;
+  a = Canvas.new;
+  a.update(content);
   #crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   #puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
 

@@ -4,7 +4,7 @@
 
 require 'net/telnet'
 
-CONTROL_CODE_REGEX = Regexp.compile(/\x1B\[(?:(?>(?>(?>\d+;)*\d+)?)m|(?>(?>\d+;\d+)?)H|K)/)
+CONTROL_CODE_REGEX = Regexp.compile('\x1B\[(?:(?>(?>(?>\d+;)*\d+)?)m|(?>(?>\d+;\d+)?)H|K)'.force_encoding('binary'), Regexp::FIXEDENCODING)
 class Canvas
   def error_buf
     @error_buf
@@ -35,14 +35,11 @@ class Canvas
         control = buf.slice!(CONTROL_CODE_REGEX)
         case control
         when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?(H|f)/
-          #$stderr.puts "========================#{control}============================"
-          #@screen.each_with_index{|s, index| $stderr.puts "#{index}:\t#{s}"}
-          #$stderr.puts 'Cursor control!'
+          dump_screen control
           @cursor[:row] = ($~[:row] or 1).to_i - 1
           @cursor[:col] = ($~[:col] or 1).to_i - 1
         when /\e\[(?<type>)K/
           type = $~[:type]
-          #$stderr.puts 'Erase control!'
           range = case type
                   when ''
                     # <ESC>[K  ==> Current to end
@@ -70,9 +67,17 @@ class Canvas
     @cursor[:col] = range.max
   end
 
+  def dump_screen(control='')
+    bar = '=' * ((@max_col - control.size)/2)
+    bar = "\t#{bar}#{control}#{bar}"
+    $stderr.puts bar
+    @screen.each_with_index{|s, index| $stderr.puts "#{index}:\t|#{s}|"}
+  end
+
   def write_raw_str(str)
     # Must simulate 1 by 1 because we have no idea about when will a new line appear...
     str.each_char{|c|
+      dump_screen
       new_line_cursor = lambda {
         @cursor[:col] = 0
         if @cursor[:row] + 1 < @max_row
@@ -92,7 +97,7 @@ class Canvas
         next
       else
         @screen[@cursor[:row]][@cursor[:col]] = c
-        @cursor[:col] += 1
+        @cursor[:col] += c.size
         new_line_cursor.call if @cursor[:col] == @max_col
       end
     }
@@ -204,10 +209,10 @@ end
 
 # main body if used as a executable
 if __FILE__ ==  $PROGRAM_NAME
-  content = open('article.log').read;
+  #content = open('article.log').read;
+  content = $stdin.read.force_encoding('binary')
   a = Canvas.new;
   a.update(content);
-  #a.screen.size
   #crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   #puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping').split('\r')
 

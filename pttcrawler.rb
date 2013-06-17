@@ -22,12 +22,12 @@ class Canvas
         control = buf.slice!(CONTROL_CODE_REGEX)
         case control
         when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?(H|f)/
-          $stderr.puts 'Cursor control!'
-          @cursor[:row] = ($~[:row] or 0)
-          @cursor[:col] = ($~[:col] or 0)
+          #$stderr.puts 'Cursor control!'
+          @cursor[:row] = ($~[:row] or 1).to_i - 1
+          @cursor[:col] = ($~[:col] or 1).to_i - 1
         when /\e\[(?<type>)K/
           type = $~[:type]
-          $stderr.puts 'Erase control!'
+          #$stderr.puts 'Erase control!'
           range = case type
                   when ''
                     # <ESC>[K  ==> Current to end
@@ -45,9 +45,14 @@ class Canvas
           @cursor[:col] = range.max
         end
       else
-        write_raw_str(buf.slice!(0...next_control_id))
+        # If no more control code then slice all!!
+        @raw_str = buf.slice!(0...next_control_id) rescue buf.slice!(0...-1)
+        write_raw_str(@raw_str)
       end
     end
+  end
+  def error_buf
+    @error_buf
   end
 
 
@@ -56,7 +61,7 @@ class Canvas
     str.each_char{|c|
       new_line_cursor = lambda {
         @cursor[:col] = 0
-        if @cursor[:row] +1 < @max_row
+        if @cursor[:row] + 1 < @max_row
           @cursor[:row] += 1
         else 
           # Overflow

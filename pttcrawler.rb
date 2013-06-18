@@ -115,8 +115,7 @@ class Canvas
 end
 
 class Crawler
-  @@refresh = "^L"
-  @@key = {
+  @@KEY = {
     :up     => "\e[A",
     :down   => "\e[B",
     :left   => "\e[D",
@@ -130,6 +129,10 @@ class Crawler
   def session
     @tn
   end
+  def self.KEY
+    @@KEY
+  end
+
 
   def initialize(opt)
     @tn = Net::Telnet.new(
@@ -143,14 +146,14 @@ class Crawler
     @canvas = Canvas.new
   end
 
-  def dump_screen
-    @canvas.dump_screen
+  def dump_screen(control='', to_stderr=false)
+    @canvas.dump_screen(control, to_stderr)
   end
 
   def login
     @tn.waitfor(/guest/)
     @tn.puts('')
-    @tn.cmd('Match' => /./, 'String' => "#{@username}\r#{@password}\r")#{|s| puts s}
+    @tn.cmd('Match' => /./, 'String' => "#{@username}\r#{@password}\r")
 
     # Log out other connections, remove failure log...
     for i in 0...2
@@ -161,7 +164,7 @@ class Crawler
             break
         end
     end
-    @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@key[:left])
+    @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@KEY[:left])
   end
 
   def send_cmd(c, opt={})
@@ -190,14 +193,15 @@ class Crawler
   def fetch_current_article()
     # Enter the article and start reading to the buf
     result = []
-    send_cmd(@@key[:right], :update => true)
-    result.concat(@canvas.dump_screen) 
+    # TODO: detect 本文已被刪除
+    send_cmd(@@KEY[:right], :update => true)
+    result.concat(@canvas.dump_screen[0...-1])    # The last line was simply a status bar, ignore it
     while true  # Greedily read until no more data and handled by the rescue
-      send_cmd(@@key[:pgdn], :update => true)
-      result.concat(@canvas.dump_screen[1...-1])  #Page down duplicates last line at line 1, so ignore it
+      send_cmd(@@KEY[:pgdn], :update => true)
+      result.concat(@canvas.dump_screen[1...-1])  # Page down duplicates last line at line 1, so ignore it
     end
   rescue TimeoutError
-      send_cmd(@@key[:left], :update => true)
+    send_cmd(@@KEY[:left], :update => true)
     return result
   end
 
@@ -216,7 +220,23 @@ end
 # main body if used as a executable
 # Here are sample usages
 if __FILE__ ==  $PROGRAM_NAME
+  PUSH_CONSTRAINT = 50
   crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   crawler.login
-  puts crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
+  crawler.goto_board 'gossiping'
+  crawler.send_cmd("Z#{PUSH_CONSTRAINT}", :enter => true)
+  for i in 1..30
+    file_name = "crawled_#{i}.txt"
+    $stderr.write "Fetching #{file_name}...."
+    article = crawler.fetch_current_article
+    crawler.send_cmd(Crawler.KEY[:up])
+    if article.size > 10
+      open(file_name, 'w'){ |f| f.puts article}
+      $stderr.puts "done."
+    else
+      $stderr.puts "seems to be a useless article"
+      redo
+    end
+  end
+  #crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
 end

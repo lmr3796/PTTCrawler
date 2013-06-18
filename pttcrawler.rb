@@ -193,7 +193,7 @@ class Crawler
   def fetch_current_article()
     # Enter the article and start reading to the buf
     result = []
-    # TODO: detect 本文已被刪除
+    # TODO: detect 本文已被刪除 so that left after going into article can be done here
     send_cmd(@@KEY[:right], :update => true)
     result.concat(@canvas.dump_screen[0...-1])    # The last line was simply a status bar, ignore it
     while true  # Greedily read until no more data and handled by the rescue
@@ -201,7 +201,6 @@ class Crawler
       result.concat(@canvas.dump_screen[1...-1])  # Page down duplicates last line at line 1, so ignore it
     end
   rescue TimeoutError
-    send_cmd(@@KEY[:left], :update => true)
     return result
   end
 
@@ -226,14 +225,18 @@ if __FILE__ ==  $PROGRAM_NAME
   crawler.goto_board 'gossiping'
   crawler.send_cmd("Z#{PUSH_CONSTRAINT}", :enter => true)
   for i in 1..30
-    file_name = "crawled_#{i}.txt"
-    $stderr.write "Fetching #{file_name}...."
+    article_file_name = "crawled_#{i}"
+    $stderr.write "Fetching #{article_file_name}...."
     article = crawler.fetch_current_article
-    crawler.send_cmd(Crawler.KEY[:up])
     if article.size > 10
-      open(file_name, 'w'){ |f| f.puts article}
+      crawler.send_cmd(Crawler.KEY[:left])
+      crawler.send_cmd(Crawler.KEY[:up])
       $stderr.puts "done."
+      push_index = article.find_index{|s| s =~ /^※ 發信站: 批踢踢實業坊\(ptt\.cc\)/}
+      open("#{article_file_name}.txt", 'w'){|f| f.puts article[0...push_index]}
+      open("#{article_file_name}.push", 'w'){|f| f.puts article[(push_index+2)..-1]}
     else
+      crawler.send_cmd(Crawler.KEY[:up])
       $stderr.puts "seems to be a useless article"
       redo
     end

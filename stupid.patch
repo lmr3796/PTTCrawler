@@ -1,0 +1,95 @@
+diff --git a/pttcrawler.rb b/pttcrawler.rb
+index ab6b47e..d14e3b9 100755
+--- a/pttcrawler.rb
++++ b/pttcrawler.rb
+@@ -40,8 +40,8 @@ class Canvas
+         case control
+         when /\e\[((?<row>\d{1,2});(?<col>\d{1,2}))?(H|f)/
+           dump_screen control
+-          @cursor[:row] = ($~[:row] or 1).to_i - 1
+-          @cursor[:col] = ($~[:col] or 1).to_i - 1
++          @cursor[:row] = ($~[:row] || 1).to_i - 1
++          @cursor[:col] = ($~[:col] || 1).to_i - 1
+         when /\e\[(?<type>)K/
+           type = $~[:type]
+           range = case type
+@@ -155,49 +155,61 @@ class Crawler
+     # Log out other connections, remove failure log...
+     for i in 0...2
+         begin
+-            @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 5, 'String' => '')
++            @tn.waitfor('Match' => /\[Y\/n\]/, 'Waittime' => 2, 'String' => '')
+             @tn.puts('n')  
+         rescue
+             break
+         end
+     end
+-    @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@key[:left])#{|s| puts s}
++    @tn.cmd('Match' => Regexp.new("批踢踢實業坊".encode('big5').force_encoding('binary')), 'String' => @@key[:left])
++  end
++
++  def send_cmd(c, opt={})
++    binmode_tmp = @tn.binmode   # In order to store the state back
++    # Must set this to switch off the implicit "enter" on every key stroke, 
++    @tn.binmode = true unless opt[:enter]
++    if opt[:update]
++      @canvas.update(@tn.cmd('Match' => opt[:match] || /./, 'String' => c))
++    else
++      @tn.cmd('Match' => opt[:match] || /./, 'String' => c)
++    end
++    @tn.binmode = binmode_tmp
+   end
+ 
+   def goto_board(board_name)
+     @tn.puts("s#{board_name}")
+     begin
+-      @tn.waitfor('Match' => Regexp.new("看板《".encode('big5').force_encoding('binary')))#{|s| puts s}
++      @tn.waitfor('Match' => Regexp.new("看板《".encode('big5').force_encoding('binary')))
+     rescue
+       @tn.puts('')
+       retry
+     end
+   end
+ 
+-  def search_article_by_id(article_id, board_name)
+-    # Goto the board
+-    goto_board(board_name) if board_name
+-
+-    # Goto a certain article
+-    @tn.cmd('Match' => /./, 'String' => article_id)
+-
+-    binmode_tmp = @tn.binmode   # In order to store the state back
+-
+-    # Must set this to switch off the implicit "enter" on every key stroke, 
+-    @tn.binmode = true
+-
++  # Get the article that PTT cursor currently at
++  def fetch_current_article()
+     # Enter the article and start reading to the buf
+     result = []
+-    @canvas.update(@tn.cmd('Match' => /./, 'Waittime' => 2, 'String' => @@key[:right]))
++    send_cmd(@@key[:right], :update => true)
+     result.concat(@canvas.dump_screen) 
+     while true  # Greedily read until no more data and handled by the rescue
+-      @canvas.update(@tn.cmd('Match' => /./, 'Waittime' => 2, 'String' => @@key[:pgdn]))
++      send_cmd(@@key[:pgdn], :update => true)
+       result.concat(@canvas.dump_screen[1...-1])  #Page down duplicates last line at line 1, so ignore it
+     end
+   rescue TimeoutError
+-    @tn.binmode = binmode_tmp
++      send_cmd(@@key[:left], :update => true)
+     return result
+   end
++
++  def search_article_by_id(article_id, board_name)
++    # Goto the board
++    goto_board(board_name) if board_name
++
++    # Goto a certain article
++    @tn.cmd('Match' => /./, 'String' => article_id)
++    return fetch_current_article
++  end
++
+ end
+ 
+ 

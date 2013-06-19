@@ -138,7 +138,7 @@ class Crawler
     @tn = Net::Telnet.new(
       'Host'    => opt[:host],
       'Timeout'   => 2,
-      'Waittime'  => 0.3,
+      'Waittime'  => 1,
     )
     ObjectSpace.define_finalizer(self, proc{@tn.close()})
     @username = opt[:username]

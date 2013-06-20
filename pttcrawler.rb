@@ -138,7 +138,7 @@ class Crawler
     @tn = Net::Telnet.new(
       'Host'    => opt[:host],
       'Timeout'   => 2,
-      'Waittime'  => 1,
+      'Waittime'  => 3,
     )
     ObjectSpace.define_finalizer(self, proc{@tn.close()})
     @username = opt[:username]
@@ -220,12 +220,18 @@ end
 # Here are sample usages
 if __FILE__ ==  $PROGRAM_NAME
   PUSH_CONSTRAINT = 50
+  BOARD_NAME = 'gossiping'
   crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   crawler.login
-  crawler.goto_board 'gossiping'
+  crawler.goto_board BOARD_NAME
+  #crawler.goto_board 'pc_shopping'
   crawler.send_cmd("Z#{PUSH_CONSTRAINT}", :enter => true)
+  #crawler.send_cmd('/[請益]'.encode('big5').force_encoding('binary'), :enter => true, :update=>true)
+  #crawler.dump_screen('', true)
+  #puts '/[請益]'.encode('big5').force_encoding('binary')
+  #exit(0)
   for i in 1..30
-    article_file_name = "crawled_#{i}"
+    article_file_name = "#{BOARD_NAME}#{i}"
     $stderr.write "Fetching #{article_file_name}...."
     article = crawler.fetch_current_article
     if article.size > 10

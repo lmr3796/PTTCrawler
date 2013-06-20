@@ -139,7 +139,7 @@ class Crawler
     @tn = Net::Telnet.new(
       'Host'    => opt[:host],
       'Timeout'   => 2,
-      'Waittime'  => 1,
+      'Waittime'  => 3,
     )
     ObjectSpace.define_finalizer(self, proc{@tn.close()})
     @username = opt[:username]
@@ -196,15 +196,22 @@ class Crawler
   def fetch_current_article()
     # Enter the article and start reading to the buf
     result = []
+    get_line_range = lambda{
+      from = @canvas.dump_screen[23].index('~')+1
+      to = @canvas.dump_screen[23].index('行')
+      return @canvas.dump_screen[23][from..to].to_i
+    }
     # TODO: detect 本文已被刪除 so that left after going into article can be done here
     send_cmd(@@KEY[:right], :update => true)
     result.concat(@canvas.dump_screen[0...-2])    # The last line was simply a status bar, ignore it
+    last_range = get_line_range.call
     while true  # Greedily read until no more data and handled by the rescue
       send_cmd(@@KEY[:pgdn], :update => true)
-      result.concat(@canvas.dump_screen[1...-1])  # Page down duplicates last line at line 1, so ignore it
+      curr_range = get_line_range.call
+      result.concat(@canvas.dump_screen[-(curr_range - last_range + 1)..-2])
+      last_range = curr_range
+      return result if @canvas.dump_screen[23].include?'100%'
     end
-  rescue TimeoutError
-    return result
   end
 
   def search_article_by_id(article_id, board_name)
@@ -222,13 +229,13 @@ end
 # main body if used as a executable
 # Here are sample usages
 if __FILE__ ==  $PROGRAM_NAME
-  PUSH_CONSTRAINT = 50
-  BOARD_NAME = 'gossiping'
+  PUSH_CONSTRAINT = 20
+  BOARD_NAME = 'pc_shopping'
   crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   crawler.login
   crawler.goto_board BOARD_NAME
   crawler.send_cmd("Z#{PUSH_CONSTRAINT}", :enter => true)
-  #crawler.send_cmd('/[請益]'.encode('big5').force_encoding('binary'), :enter => true, :update=>true)
+  crawler.send_cmd('/[請益]'.encode('big5').force_encoding('binary'), :enter => true, :update=>true)
   #puts '/[請益]'.encode('big5').force_encoding('binary')
   #crawler.search_article_by_id('#1HmhiC9D', 'gossiping')
   for i in 1..30
@@ -240,8 +247,13 @@ if __FILE__ ==  $PROGRAM_NAME
       crawler.send_cmd(Crawler.KEY[:up])
       $stderr.puts "done."
       push_index = article.find_index{|s| s =~ /^※ 發信站: 批踢踢實業坊\(ptt\.cc\)/}
-      open("#{article_file_name}.txt", 'w'){|f| f.puts article[0...push_index]}
-      open("#{article_file_name}.push", 'w'){|f| f.puts article[(push_index+2)..-1]}
+      begin
+        open("#{article_file_name}.txt", 'w'){|f| f.puts article[0...push_index]}
+        open("#{article_file_name}.push", 'w'){|f| f.puts article[(push_index+2)..-1]}
+      rescue
+        $stderr.puts 'Separating comments failed'
+        open("#{article_file_name}.txt", 'w'){|f| f.puts article}
+      end
     else
       crawler.send_cmd(Crawler.KEY[:up])
       $stderr.puts "seems to be a useless article"

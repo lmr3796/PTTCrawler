@@ -106,9 +106,10 @@ class Canvas
       when /\r/
         next
       else
+        # Can't check new line after, otherwise a \n after a full line will cause a redundant line
+        new_line_cursor.call if @cursor[:col] == @max_col
         @screen[@cursor[:row]][@cursor[:col]] = c
         @cursor[:col] += c.size
-        new_line_cursor.call if @cursor[:col] == @max_col
       end
     }
   end
@@ -151,6 +152,7 @@ class Crawler
   end
 
   def login
+    $stderr.puts 'Login...'
     @tn.waitfor(/guest/)
     @tn.puts('')
     @tn.cmd('Match' => /./, 'String' => "#{@username}\r#{@password}\r")
@@ -170,7 +172,7 @@ class Crawler
   def send_cmd(c, opt={})
     binmode_tmp = @tn.binmode   # In order to store the state back
     # Must set this to switch off the implicit "enter" on every key stroke, 
-    @tn.binmode = true unless opt[:enter]
+    @tn.binmode = (opt[:enter] == true ? false : true)
     if opt[:update]
       @canvas.update(@tn.cmd('Match' => opt[:match] || /./, 'String' => c))
     else
@@ -180,6 +182,7 @@ class Crawler
   end
 
   def goto_board(board_name)
+    $stderr.puts "Going to board #{board_name}..."
     @tn.puts("s#{board_name}")
     begin
       @tn.waitfor('Match' => Regexp.new("看板《".encode('big5').force_encoding('binary')))
@@ -195,7 +198,7 @@ class Crawler
     result = []
     # TODO: detect 本文已被刪除 so that left after going into article can be done here
     send_cmd(@@KEY[:right], :update => true)
-    result.concat(@canvas.dump_screen[0..-1])    # The last line was simply a status bar, ignore it
+    result.concat(@canvas.dump_screen[0...-2])    # The last line was simply a status bar, ignore it
     while true  # Greedily read until no more data and handled by the rescue
       send_cmd(@@KEY[:pgdn], :update => true)
       result.concat(@canvas.dump_screen[1...-1])  # Page down duplicates last line at line 1, so ignore it
@@ -224,12 +227,10 @@ if __FILE__ ==  $PROGRAM_NAME
   crawler = Crawler.new(:host => 'ptt.cc', :username => ARGV[0], :password => ARGV[1])
   crawler.login
   crawler.goto_board BOARD_NAME
-  #crawler.goto_board 'pc_shopping'
   crawler.send_cmd("Z#{PUSH_CONSTRAINT}", :enter => true)
   #crawler.send_cmd('/[請益]'.encode('big5').force_encoding('binary'), :enter => true, :update=>true)
-  #crawler.dump_screen('', true)
   #puts '/[請益]'.encode('big5').force_encoding('binary')
-  #exit(0)
+  #crawler.search_article_by_id('#1HmhiC9D', 'gossiping')
   for i in 1..30
     article_file_name = "#{BOARD_NAME}#{i}"
     $stderr.write "Fetching #{article_file_name}...."
@@ -247,5 +248,4 @@ if __FILE__ ==  $PROGRAM_NAME
       redo
     end
   end
-  #crawler.search_article_by_id('#1Hl8-Aly', 'gossiping')
 end

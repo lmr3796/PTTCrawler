@@ -138,7 +138,7 @@ class Crawler
     @tn = Net::Telnet.new(
       'Host'    => opt[:host],
       'Timeout'   => 2,
-      'Waittime'  => 3,
+      'Waittime'  => 1,
     )
     ObjectSpace.define_finalizer(self, proc{@tn.close()})
     @username = opt[:username]
@@ -195,7 +195,7 @@ class Crawler
     result = []
     # TODO: detect 本文已被刪除 so that left after going into article can be done here
     send_cmd(@@KEY[:right], :update => true)
-    result.concat(@canvas.dump_screen[0...-1])    # The last line was simply a status bar, ignore it
+    result.concat(@canvas.dump_screen[0..-1])    # The last line was simply a status bar, ignore it
     while true  # Greedily read until no more data and handled by the rescue
       send_cmd(@@KEY[:pgdn], :update => true)
       result.concat(@canvas.dump_screen[1...-1])  # Page down duplicates last line at line 1, so ignore it
